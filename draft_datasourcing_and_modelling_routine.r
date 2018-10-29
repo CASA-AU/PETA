@@ -19,23 +19,30 @@
 #     with this program; if not, write to the Free Software Foundation, Inc.,
 #     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-
-library(gdata)        ## needed for rename.vars
-library(pscl)         ## needed for zeroinfl
-library(strucchange)  ## need for breakpoints
+suppressPackageStartupMessages(library(gdata))        ## needed for rename.vars
+suppressPackageStartupMessages(library(pscl))         ## needed for zeroinfl
+suppressPackageStartupMessages(library(zoo))
+suppressPackageStartupMessages(library(strucchange))  ## need for breakpoints
 library(lubridate)    ## Parse date strings
 
 szIndir <- 'inputs/'
 szOutdir <- 'outputs/'
 szFunctionsdir <- 'subroutines_and_functions/'
 
+stopifnot(dir.exists(szIndir))
+stopifnot(dir.exists(szFunctionsdir))
+
+if (!dir.exists(szOutdir)) {
+  dir.create(szOutdir)
+}
+
 ##
 ## Read input files
 ##
 
 dfOcc <- read.csv(paste0(szIndir, 'OCCURRENCE.csv'), stringsAsFactors = FALSE)
-dfOccType <- read.csv(paste0(szIndir, 'OCCURRENCE_TYPE.csv'), stringsAsFactors = FALSE)
-dfOccAC <- read.csv(paste0(szIndir, 'OCCURRENCE_AIRCRAFT.csv'), stringsAsFactors = FALSE)
+dfOccType <- read.csv(paste0(szIndir, 'OCCURRENCE TYPE.csv'), stringsAsFactors = FALSE)
+dfOccAC <- read.csv(paste0(szIndir, 'OCCURRENCE AIRCRAFT.csv'), stringsAsFactors = FALSE)
 
 ##
 ## DO NOT use this tool to analyse numerical data; the regression is performed on the sum of the
@@ -45,7 +52,7 @@ dfOccAC <- read.csv(paste0(szIndir, 'OCCURRENCE_AIRCRAFT.csv'), stringsAsFactors
 ## In this example the "Number of People who Sustained a Fatality" is used to create a new "isFatal"
 ## column which has the values "IS_FATAL" or "NOT_FATAL".
 ##
-dfOcc$isFatal <- ifelse(dfOcc$Number.of.People.who.Sustained.a.Fatality > 0, "IS_FATAL", "NOT_FATAL")
+dfOcc$isFatal <- ifelse(dfOcc$Occurrence.Total.Injury.Fatal > 0, "IS_FATAL", "NOT_FATAL")
 dfOcc[is.na(dfOcc$isFatal), "isFatal"] <- "NOT_FATAL"
 
 ##
@@ -60,10 +67,11 @@ dfOcc[is.na(dfOcc$isFatal), "isFatal"] <- "NOT_FATAL"
 ## developed on the assumption that 20 quarters would be used.
 ##
 
-startDate <- as.Date("2010-01-01")
-endDate <- as.Date("2014-12-31")
+endDate <- ymd("2018-06-30")
+startDate <- endDate - months(60)
 
-dfOcc$Date <- as.Date(dmy(dfOcc$Occurrence.Date.and.Time))
+dfOcc$Date <- as.Date(dmy_hm(dfOcc$Occurrence.Date.and.Time))
+
 dfOcc <- dfOcc[dfOcc$Date >= startDate & dfOcc$Date <= endDate, ]
 dfOccAC <- dfOccAC[dfOccAC$Occurrence.ID %in% dfOcc$Occurrence.ID, ]
 dfOccType <- dfOccType[dfOccType$Occurrence.ID %in% dfOcc$Occurrence.ID, ]
@@ -112,6 +120,15 @@ dfOccType <- dfOccType[dfOccType$Occurrence.Type.Description != " : ", ]
 
 ################################
 ## Examples on deriving other possible combined variables
+
+## CASA Sector
+
+dfOccAC$Aircraft.Sector.Full <- paste(
+  dfOccAC$Aircraft.Mapped.CASA.Segment,
+  dfOccAC$Aircraft.Mapped.CASA.Sector,
+  dfOccAC$Aircraft.Mapped.CASA.Sector.Class,
+  sep = "_"
+)
 
 ## Full aircraft operation type - combine the main and sub type information
 dfOccAC$Aircraft.Operation.Type.Full <- paste(dfOccAC$Aircraft.Operation.Type
@@ -202,15 +219,15 @@ source(paste0(szFunctionsdir, 'RunTAnalysis.r'))
 
 ## Example 1:  analysing the trend in the number of poeple who sustained a fatality
 ##  Step 1:  Data frame building
-fnDFBuild(fVarlist = c('Aircraft.Operation.Type', 'Occurrence.Category.Type')
+fnDFBuild(fVarlist = c('Aircraft.Sector.Full', 'Occurrence.Category.Type')
           , fVarClass = c('character', 'character')
           , fDFList = lzOcc
           , fRefID = "Occurrence.ID"
           , fexposuredat = exposuredat
 					)
 
-datfrm  ## Check data frame
-arVarvals  ## Check the variables to analyse
+# datfrm  ## Check data frame
+# arVarvals  ## Check the variables to analyse
 
 
 ## Step 2: 
