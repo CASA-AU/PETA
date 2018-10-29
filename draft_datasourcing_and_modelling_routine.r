@@ -3,7 +3,7 @@
 # R Script for developing and testing data sourcing mechanism for the Trend Analysis Tool
 # -------------------------------------------------------------------------------------------------------------------------------------------------------- 
 #
-#     Copyright (C) 2015  Civil Aviation Safety Authority
+#     Copyright (C) 2018  Civil Aviation Safety Authority
 # 
 #     This program is free software; you can redistribute it and/or modify
 #     it under the terms of the GNU General Public License as published by
