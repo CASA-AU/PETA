@@ -48,7 +48,16 @@ config <- read_yaml("PETA.yaml")
 # We can only process one source at a time - configure with this variable.
 # TODO - See if we can process multiple sources in one run.
 
-source <- 'ASIR'
+source <- 'CIRRIS'
+
+stopifnot(
+  source %in% names(config),
+  !is.null(config[[c(source,'Input')]]),
+  !is.null(config[[c(source,'Date')]]),
+  !is.null(config[[c(source,'Date','End')]]),
+  !is.null(config[[c(source,'Identifier')]]),
+  !is.null(config[[c(source,'Analyse')]])
+)
 
 ##
 ## Read input files
@@ -62,9 +71,57 @@ l_ply(names(config[[c(source,'Input')]]), function(input) {
   
   ##
   ## Identifier is used to nominate a field that should be used as the identifier.
+  ## The nominated field is renamed to be the Identifier named at the source level.
   ##
   if (!is.null(config[[c(source,'Input',input,'Identifier')]])) {
+    stopifnot(config[[c(source,'Input',input,'Identifier')]] %in% colnames(tmp))
+    
     colnames(tmp)[match(config[[c(source,'Input',input,'Identifier')]], colnames(tmp))] <- config[[c(source,'Identifier')]]
+  }
+  
+  ##
+  ## Convert the date field to an R Date object.
+  ##
+  if (!is.null(config[[c(source,'Input',input,'Date')]])) {
+    stopifnot(!is.null(config[[c(source,'Input',input,'Date','Field')]]))
+    stopifnot(config[[c(source,'Input',input,'Date','Field')]] %in% colnames(tmp))
+    
+    tmp[,config[[c(source,'Input',input,'Date','Field')]]] <- as.Date(
+      tmp[,config[[c(source,'Input',input,'Date','Field')]]],
+      format = config[[c(source,'Input',input,'Date','Format')]]
+    )
+    
+    missingDates <- sum(is.na(tmp[,config[[c(source,'Input',input,'Date','Field')]]]))
+    if (missingDates != 0) {
+      tmp <- tmp[!is.na(tmp[,config[[c(source,'Input',input,'Date','Field')]]]), ]
+      warning(
+        "Source: ", source, ". ", missingDates, " observations in ", input,
+        " (", config[[c(source,'Input',input,'Filename')]], ")",
+        "had NA values for the Date. These observations have been removed."
+      )
+    }
+    
+    ##
+    ## Get the start and end dates from the configuration
+    ## Filter the occurrence data by date.
+    ##
+    endDate <- as.Date(config[[c(source,'Date','End')]])
+    if (is.null(config[[c(source,'Date','Start')]])) {
+      # At this stage we only support quarters
+      stopifnot(config[[c(source,'Date','Units')]] == "quarters")
+      startDate <- endDate - months(3 * config[[c(source,'Date','Period')]])
+    } else {
+      startDate <- as.Date(config[[c(source,'Date','Start')]])
+    }
+    
+    tmp <- tmp[
+      tmp[, config[[c(source,'Input',input,'Date','Field')]]] > startDate &
+        tmp[, config[[c(source,'Input',input,'Date','Field')]]] <= endDate, ]
+    
+    # At this stage we only support quarters
+    quarters <- seq(from = startDate, to = endDate, by = "3 months")
+    
+    tmp$yr_Q <- cut(tmp[, config[[c(source,'Input',input,'Date','Field')]]], breaks = quarters, right = TRUE)
   }
   
   ##
@@ -83,15 +140,29 @@ l_ply(names(config[[c(source,'Input')]]), function(input) {
   }
   
   ##
-  ## MapValues is used to map rubbish data to cleansed values.
+  ## Separate is used to separate a column into multiple columns.
+  ##
+  if (!is.null(config[[c(source,'Input',input,'Separate')]])) {
+    for (field in names(config[[c(source,'Input',input,'Separate')]])) {
+      tmp <- separate(
+        tmp,
+        col = field,
+        into = config[[c(source,'Input',input,'Separate',field,'Into')]],
+        sep = config[[c(source,'Input',input,'Separate',field,'Separator')]]
+      )
+    }
+  }
+  
+  ##
+  ## MapValues is used to map missing or rubbish data to cleansed values.
   ##
   if (!is.null(config[[c(source,'Input',input,'MapValues')]])) {
     for (field in names(config[[c(source,'Input',input,'MapValues')]])) {
       
-      fieldMap <- unlist(lapply(names(config[[c(source,'Input',input,'MapValues',field)]]), function(manu) {
-        x <- character(length = length(config[[c(source,'Input',input,'MapValues',field,manu)]]))
-        names(x) <- config[[c(source,'Input',input,'MapValues',field,manu)]]
-        x[TRUE] <- manu
+      fieldMap <- unlist(lapply(names(config[[c(source,'Input',input,'MapValues',field)]]), function(value) {
+        x <- character(length = length(config[[c(source,'Input',input,'MapValues',field,value)]]))
+        names(x) <- config[[c(source,'Input',input,'MapValues',field,value)]]
+        x[TRUE] <- value
         return(x)
       }))
       
@@ -99,27 +170,28 @@ l_ply(names(config[[c(source,'Input')]]), function(input) {
     }
   }
   
+  ##
+  ## Finally, confirm that the Identifier exists and stop() if it does not.
+  ##
+  if(!config[[c(source,'Identifier')]] %in% colnames(tmp)) {
+    stop(
+      "Identifier ", config[[c(source,'Identifier')]], " was not found in ", input,
+      " (", config[[c(source,'Input',input,'Filename')]], ")."
+    )
+  }
+  
+  missingIdentifier <- sum(is.na(tmp[,config[[c(source,'Identifier')]]]))
+  if (missingIdentifier != 0) {
+    tmp <- tmp[!is.na(tmp[,config[[c(source,'Identifier')]]]), ]
+    warning(
+      "Source: ", source, ". ", missingIdentifier, " observations in ", input,
+      " (", config[[c(source,'Input',input,'Filename')]], ")",
+      "had NA values for the Identifier. These observations have been removed."
+    )
+  }
+  
   assign(input, tmp, envir = .GlobalEnv)
 })
-
-###
-### Get the start and end dates from the configuration
-### Filter the occurrence data by date.
-###
-
-endDate <- ymd(config[[c(source,'Date','End')]])
-if (is.null(config[[c(source,'Date','Start')]])) {
-  startDate <- endDate - months(60)
-} else {
-  startDate <- ymd(config[[c(source,'Date','Start')]])
-}
-
-dfOcc$Date <- as.Date(dfOcc[, config[[c(source,'Date','Field')]]], format = config[[c(source,'Date','Format')]])
-dfOcc <- dfOcc[dfOcc$Date > startDate & dfOcc$Date <= endDate, ]
-
-quarters <- seq(from = startDate, to = endDate, by = "3 months")
-
-dfOcc$yr_Q <- cut(dfOcc$Date, breaks = quarters, right = TRUE)
 
 ## Filter the other data.frames by Identifier
 
@@ -135,20 +207,7 @@ dfOccAC <- merge(dfOccAC, dfOcc[,c(config[[c(source,'Identifier')]],"yr_Q")], by
 ### Peform source-specific munging of the data.
 ###
 
-if (source == 'CIRRIS') {
-  dfOcc <- dfOcc[!(is.na(dfOcc$Occurrence.Report.Number) | dfOcc$Occurrence.Date == ""), ]
-  
-  dfOccType <- separate(
-    dfOccType,
-    Occurrence.Type...Temporary.Key,
-    into = c("Occurrence.Report.Number","Occurrence.Type...Key"),
-    sep = 11
-  )
-
-  dfOccAC[dfOccAC$VH.Aircraft...Registered.Operator.Name..Derived. == "", "VH.Aircraft...Registered.Operator.Name..Derived."] <- "UNKNOWN"
-
-} else if (source == 'ASIR') {
-
+if (source == 'ASIR') {
   dfOcc$isFatal <- ifelse(dfOcc$Occurrence.Highest.Injury.Level == "Fatal", "IS_FATAL", "NOT_FATAL")
   
   dfOccType$Occurrence.Type.Description <- sub(' : $', '', dfOccType$Occurrence.Type.Description)
@@ -202,8 +261,6 @@ if (source == 'CIRRIS') {
   dfOcc$Aerodrome.Distance.to.Occurrence.NM <- sub(",","", dfOcc$Aerodrome.Distance.to.Occurrence.NM)
   dfOcc$Aerodrome.Distance.to.Occurrence.NM <- as.numeric(dfOcc$Aerodrome.Distance.to.Occurrence.NM)
   dfOcc$Aerodrome <- ifelse(dfOcc$Aerodrome.Distance.to.Occurrence.NM < 10, dfOcc$Aerodrome.Name, "MORE THAN TEN NM")
-} else {
-  stop('Unknown source')
 }
 
 #   --------------------------    Collation of all data frames into a list   ---------------------------------------    #

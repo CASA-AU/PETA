@@ -2,15 +2,28 @@ CIRRIS:
   Input:
     dfOcc:
       Filename: CIRRIS OCC.csv
+      Date:
+        Field: Occurrence.Date
+        Format: '%e/%m/%y'
     dfOccType:
       Filename: CIRRIS OCC TYPE.csv
+      Separate:
+        Occurrence.Type...Temporary.Key:
+          Into:
+          - Occurrence.Report.Number
+          - Occurrence.Type...Key
+          Separator: 11
     dfOccAC:
       Filename: CIRRIS OCC ACFT.csv
       Identifier: Aircraft.Vehicle...Occurrence.Report.Number
+      MapValues:
+        VH.Aircraft...Registered.Operator.Name..Derived.:
+          UNKNOWN:
+          - ''
   Date:
     End: '2018-11-30'
-    Field: Occurrence.Date
-    Format: '%e/%m/%y'
+    Period: 20
+    Units: quarters
   Identifier: Occurrence.Report.Number
   Analyse:
     Operator:
@@ -47,6 +60,9 @@ ASIR:
   Input:
     dfOcc:
       Filename: OCCURRENCE.csv
+      Date:
+        Field: Occurrence.Date
+        Format: '%d %b %Y'
     dfOccType:
       Filename: OCCURRENCE TYPE.csv
       ConcatField:
@@ -182,8 +198,8 @@ ASIR:
           - JABIRU ENGINES
   Date:
     End: '2018-11-30'
-    Field: Occurrence.Date
-    Format: '%d %b %Y'
+    Period: 20
+    Units: quarters
   Identifier: Occurrence.ID
   Analyse:
     FatalAccident:
