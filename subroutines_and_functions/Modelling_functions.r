@@ -38,18 +38,17 @@
 ## outputs: pvalue (which if < 0.05 show overdispersion)
 testdis <- function(dat, fvarname, fexposuredat){
   # Fit quasipoisson model (m1) and test dispersion
-	if (fexposuredat==TRUE) {
-		qp1 <- glm(paste0(fvarname, "~ trend + lastspecial + offset(lexposure)")
-							 , family=quasipoisson(link="log")
-							 , data=dat
-		)
-	} else {
-    
-	  qp1 <- glm(paste0(fvarname, "~ trend + lastspecial")
-							 , family=quasipoisson(link="log")
-							 , data=dat						 
-		)  
-	}
+  if (fexposuredat==TRUE) {
+    qp1 <- glm(paste0(fvarname, "~ trend + lastspecial + offset(lexposure)")
+               , family=quasipoisson(link="log")
+               , data=dat
+    )
+  } else {
+    qp1 <- glm(paste0(fvarname, "~ trend + lastspecial")
+               , family=quasipoisson(link="log")
+               , data=dat             
+    )  
+  }
   
   Pearsonchisq <- summary(qp1)$dispersion * qp1$df.residual
   pval <- pchisq(Pearsonchisq,qp1$df.residual, lower.tail=FALSE)
@@ -97,7 +96,7 @@ poissonmods <- function(dat, fvarname, fexposuredat){
               , data=dat          
     )
   }
-						
+            
   ## m1 fitted with poisson dist
   p2 <- update(p1,.~. -trend) ## m2 fitted with poisson dist
   p3 <- update(p1,.~.-lastspecial) ## m3 fitted with poisson dist
@@ -122,7 +121,7 @@ qpoissonmods <- function(dat, fvarname, fexposuredat){
                , data=dat
     )
   }
- 						 
+              
   ## m1 fitted with quasipoisson dist
   qp2 <- update(qp1,.~.-trend) ## m2 fitted with quasipoisson dist
   qp3 <- update(qp1,.~. -lastspecial) ## m3 fitted with quasipoisson dist
@@ -138,30 +137,30 @@ qpoissonmods <- function(dat, fvarname, fexposuredat){
 ### 1 - if evidence of zero inflated data
 ### 0 - if no evidence of zero inflated data
 zeroinf <- function(dat, fvarname_for_glm, fexposuredat){
-	## We need to ensure there is more than one zero in the first (n-1) points in dat
-	## (lastspecial always fits the last point perfectly)
+  ## We need to ensure there is more than one zero in the first (n-1) points in dat
+  ## (lastspecial always fits the last point perfectly)
   if(min(dat[-nrow(dat), fvarname_for_glm])> 0) {
-		zinfflag <- 0
-	} else {
+    zinfflag <- 0
+  } else {
     # Note, the first part of the model formula (before |) relates to counts model;
     # second part of the formula (after |) relates to the ZI model.
-	  if (fexposuredat==TRUE) {
-	    zinflmod <- zeroinfl(as.formula(paste0(fvarname_for_glm, "~ trend + lastspecial + offset(lexposure) | 1"))
-	                         , dist="poisson"
+    if (fexposuredat==TRUE) {
+      zinflmod <- zeroinfl(as.formula(paste0(fvarname_for_glm, "~ trend + lastspecial + offset(lexposure) | 1"))
+                           , dist="poisson"
                            , link="logit"
                            , data=dat
-	                    )
-	  } else {
-	    zinflmod <- zeroinfl(as.formula(paste0(fvarname_for_glm, "~ trend + lastspecial | 1"))
-	                         , dist="poisson"
+                      )
+    } else {
+      zinflmod <- zeroinfl(as.formula(paste0(fvarname_for_glm, "~ trend + lastspecial | 1"))
+                           , dist="poisson"
                            , link="logit"
                            , data=dat
                            )
-	  }
+    }
 
-	  
-	  #  p-value for whether there is zero-inflation
-	  zinflmodpval <- summary(zinflmod)$coef$zero["(Intercept)", "Pr(>|z|)"]  
+    
+    #  p-value for whether there is zero-inflation
+    zinflmodpval <- summary(zinflmod)$coef$zero["(Intercept)", "Pr(>|z|)"]  
     
     ### zero inf flag
     zinfflag <- ifelse(zinflmodpval < 0.05, 1, 0)
@@ -196,33 +195,33 @@ outcount <- function(dat, allmods, bestmod, pdist="poisson") {
 lstrendflags <- function(pmods) {
   ## likelihood ratio tests for the poisson models
   anovatab <- anova(pmods$p1, pmods$p2, pmods$p4, pmods$p3, pmods$p1
-										, test="LR"
-										)
+                    , test="LR"
+                    )
   
-	## Added 20140529 - fix for the missing p-val due to negligible change in deviance
-	## Look for any missing p-value - the first row can be skipped
-	if (any(is.na(anovatab[2:5, "Pr(>Chi)"]))) {
-		## Which row has NA?
-		NARows <- which(is.na(anovatab[2:5, "Pr(>Chi)"]))
-	 
-		## Loop through NA row/s and fix p-value if due to machine error at zero change in deviance
-		## Note flp1 range from 1 to 4 but anovatab has 5 rows, therefore [flp1 + 1] look up is used
-		for (flp1 in NARows) {
-			
-			if (abs(anovatab$"Deviance"[flp1+1]) < 1e-10) {
-				## Very small change in deviance - must have a wrong sign to give NA p-value
-				anovatab$"Pr(>Chi)"[flp1+1] <- 1
-			} else {
-				stop(cat('Missing p-value in ANOVA table for m1 to m4.\n'
-								 , 'Check', svar, 'in', fanalysisvar
-								 , '\n'
-								 )
-						 )
-			}
-		}
-	}
-	
-	
+  ## Added 20140529 - fix for the missing p-val due to negligible change in deviance
+  ## Look for any missing p-value - the first row can be skipped
+  if (any(is.na(anovatab[2:5, "Pr(>Chi)"]))) {
+    ## Which row has NA?
+    NARows <- which(is.na(anovatab[2:5, "Pr(>Chi)"]))
+   
+    ## Loop through NA row/s and fix p-value if due to machine error at zero change in deviance
+    ## Note flp1 range from 1 to 4 but anovatab has 5 rows, therefore [flp1 + 1] look up is used
+    for (flp1 in NARows) {
+      
+      if (abs(anovatab$"Deviance"[flp1+1]) < 1e-10) {
+        ## Very small change in deviance - must have a wrong sign to give NA p-value
+        anovatab$"Pr(>Chi)"[flp1+1] <- 1
+      } else {
+        stop(cat('Missing p-value in ANOVA table for m1 to m4.\n'
+                 , 'Check', svar, 'in', fanalysisvar
+                 , '\n'
+                 )
+             )
+      }
+    }
+  }
+  
+  
   ## use backwards elimination for automated model selection
   ## Lattice diagram
   ##       m1 trend + lastspecial
@@ -237,90 +236,90 @@ lstrendflags <- function(pmods) {
   ##
 
   ######################################################################
-	## If Version of the model selection algorithm - With this many if statements, ifelse will not be my first choice of 
-	## algorithm coding.
-	if (anovatab[5, "Pr(>Chi)"]<0.05) { 
-		
-		#  m1 beats m3, next test m1 vs m2
-		if (anovatab[2, "Pr(>Chi)"]<0.05) { 
-			#  m1 beats m2, choose m1
-			modsel <- "p1"
-		} else { # Otherwise  m2 is OK, test whether m4 is just as good
-			if (anovatab[3, "Pr(>Chi)"]<0.05) {
-				# m2 beats m4, choose m2
-				modsel <- "p2"
-			} else { # Otherwise, m4 is OK, choose m4, *** even though m1 vs m3 was signif, but we have m1 to m2 to m4 not signif
-			         # (We COULD say record m1 as a contender and add to plot, but will not do this for now.)
-					 # (Could even be more sophisticated and choose between m1 and m4 on basis of test between m1 and m4 on 2 df.)
-				modsel <- "p4"  
-			}
-		}
-		
-	} else {  # m3 as good as m1, next test m1 vs m2
-		
-		if (anovatab[2, "Pr(>Chi)"]<0.05) {
-		
-			# m1 beats m2, next test m3 vs m4
-			if (anovatab[4, "Pr(>Chi)"]<0.05) {
-				# m3 beats m4, choose m3
-				modsel <- "p3"
-			} else {  # Otherwise  m4 as good as m3, choose m4, *** even though m1 vs m2 was signif, but we have m1 to m3 to m4 not signif
-				modsel <- "p4"
-			}
-			
-		} else { # Otherwise either of m2 or m3 is OK; both lastspecial and trend are (individually) NS in m1; 
-			
-			#which term appears "least significant" and should be dropped first?
-			# We COULD record the other of m2 and m3 as a contender and include on plot, but we will not do this for now.
-			if (anovatab[5, "Pr(>Chi)"] > anovatab[2, "Pr(>Chi)"]) {
-			
-				# m3 "better" than m2; proceed from m3 and test m3 vs m4
-				if (anovatab[4, "Pr(>Chi)"]<0.05) {
-					# m3 beats m4, choose m3
-					modsel <- "p3"
-				} else {
-					# m4 as good as m3, choose m4
-					modsel <- "p4"
-				}
-				
-			} else {  # Otherwise  m2 "better" than m3; proceed from m2 and test m2 vs m4
-				if (anovatab[3, "Pr(>Chi)"]<0.05) {
-					# m2 beats m4, choose m2
-					modsel <- "p2"
-				} else {
-					# m4 as good as m2, choose m4
-					modsel <- "p4"
-				}
-			}
-		}
-	}
-  ######################################################################	
-	
+  ## If Version of the model selection algorithm - With this many if statements, ifelse will not be my first choice of 
+  ## algorithm coding.
+  if (anovatab[5, "Pr(>Chi)"]<0.05) { 
+    
+    #  m1 beats m3, next test m1 vs m2
+    if (anovatab[2, "Pr(>Chi)"]<0.05) { 
+      #  m1 beats m2, choose m1
+      modsel <- "p1"
+    } else { # Otherwise  m2 is OK, test whether m4 is just as good
+      if (anovatab[3, "Pr(>Chi)"]<0.05) {
+        # m2 beats m4, choose m2
+        modsel <- "p2"
+      } else { # Otherwise, m4 is OK, choose m4, *** even though m1 vs m3 was signif, but we have m1 to m2 to m4 not signif
+               # (We COULD say record m1 as a contender and add to plot, but will not do this for now.)
+           # (Could even be more sophisticated and choose between m1 and m4 on basis of test between m1 and m4 on 2 df.)
+        modsel <- "p4"  
+      }
+    }
+    
+  } else {  # m3 as good as m1, next test m1 vs m2
+    
+    if (anovatab[2, "Pr(>Chi)"]<0.05) {
+    
+      # m1 beats m2, next test m3 vs m4
+      if (anovatab[4, "Pr(>Chi)"]<0.05) {
+        # m3 beats m4, choose m3
+        modsel <- "p3"
+      } else {  # Otherwise  m4 as good as m3, choose m4, *** even though m1 vs m2 was signif, but we have m1 to m3 to m4 not signif
+        modsel <- "p4"
+      }
+      
+    } else { # Otherwise either of m2 or m3 is OK; both lastspecial and trend are (individually) NS in m1; 
+      
+      #which term appears "least significant" and should be dropped first?
+      # We COULD record the other of m2 and m3 as a contender and include on plot, but we will not do this for now.
+      if (anovatab[5, "Pr(>Chi)"] > anovatab[2, "Pr(>Chi)"]) {
+      
+        # m3 "better" than m2; proceed from m3 and test m3 vs m4
+        if (anovatab[4, "Pr(>Chi)"]<0.05) {
+          # m3 beats m4, choose m3
+          modsel <- "p3"
+        } else {
+          # m4 as good as m3, choose m4
+          modsel <- "p4"
+        }
+        
+      } else {  # Otherwise  m2 "better" than m3; proceed from m2 and test m2 vs m4
+        if (anovatab[3, "Pr(>Chi)"]<0.05) {
+          # m2 beats m4, choose m2
+          modsel <- "p2"
+        } else {
+          # m4 as good as m2, choose m4
+          modsel <- "p4"
+        }
+      }
+    }
+  }
+  ######################################################################  
+  
   ## set the last special  (lsflag) and trend flags (trendflag) 
   ## based on the selected model, sign of coeff, effect size 
-	if (modsel=="p1"){
+  if (modsel=="p1"){
     lsflag <- ifelse(summary(pmods$p1)$coefficients["lastspecial", "Estimate"]>0, 
                      ifelse(anovatab[5, "Pr(>Chi)"]<0.01, 1, 2),
                      ifelse(anovatab[5, "Pr(>Chi)"]<0.01, 5, 4))
     trendflag <- ifelse(summary(pmods$p1)$coefficients["trend","Estimate"]>0, "up", "down")
   }
-	
-	if (modsel=="p2") {
-		lsflag <- ifelse(summary(pmods$p2)$coefficients["lastspecial", "Estimate"]>0, 
-										 ifelse(anovatab[3, "Pr(>Chi)"]<0.01, 1, 2),
-										 ifelse(anovatab[3, "Pr(>Chi)"]<0.01, 5, 4))
-		trendflag <- "-"
-	}
+  
+  if (modsel=="p2") {
+    lsflag <- ifelse(summary(pmods$p2)$coefficients["lastspecial", "Estimate"]>0, 
+                     ifelse(anovatab[3, "Pr(>Chi)"]<0.01, 1, 2),
+                     ifelse(anovatab[3, "Pr(>Chi)"]<0.01, 5, 4))
+    trendflag <- "-"
+  }
 
-	if (modsel=="p3") {
-		lsflag <- 3
-		trendflag <- ifelse(summary(pmods$p1)$coefficients["trend","Estimate"]>0, "up", "down")
-	} 
-	
-	if (modsel=="p4") {
-		lsflag <- 3
-		trendflag <- ""
-	}
+  if (modsel=="p3") {
+    lsflag <- 3
+    trendflag <- ifelse(summary(pmods$p1)$coefficients["trend","Estimate"]>0, "up", "down")
+  } 
+  
+  if (modsel=="p4") {
+    lsflag <- 3
+    trendflag <- ""
+  }
   
   return(list(lsflag=lsflag, trendflag=trendflag, anovatab=anovatab, modsel=modsel))
 }
@@ -333,31 +332,31 @@ qlstrendflags <- function(fqpmods, svar, varname){
   ##  Logic is the same as lstrendflags using anovatab and Chisq tests, but here use anovatabq and F-tests
   ## F tests for the quasipoisson models
   anovatabq <- anova(fqpmods$qp1, fqpmods$qp2, fqpmods$qp4, fqpmods$qp3
-										 , fqpmods$qp1, test="F"
-										 )
+                     , fqpmods$qp1, test="F"
+                     )
 
-	## Added 20140529 - fix for the missing p-val due to negligible change in deviance
-	## Look for any missing p-value - the first row can be skipped
-	if (any(is.na(anovatabq[2:5, "Pr(>F)"]))) {
-		## Which row has NA?
-		NARows <- which(is.na(anovatabq[2:5, "Pr(>F)"]))
-	 
-		## Loop through NA row/s and fix p-value if due to machine error at zero change in deviance
-		## Note flp1 range from 1 to 4 but anovatabq has 5 rows, therefore [flp1 + 1] look up is used
-		for (flp1 in NARows) {
-			
-			if (abs(anovatabq$"Deviance"[flp1+1]) < 1e-10) {
-				## Very small change in deviance - must have a wrong sign to give NA p-value
-				anovatabq$"Pr(>F)"[flp1+1] <- 1
-			} else {
-				stop(cat('Missing p-value in ANOVA table for m1 to m4.\n'
-								 , 'Check', svar, 'in', varname
-								 , '\n'
-								 )
-						 )
-			}
-		}
-	}
+  ## Added 20140529 - fix for the missing p-val due to negligible change in deviance
+  ## Look for any missing p-value - the first row can be skipped
+  if (any(is.na(anovatabq[2:5, "Pr(>F)"]))) {
+    ## Which row has NA?
+    NARows <- which(is.na(anovatabq[2:5, "Pr(>F)"]))
+   
+    ## Loop through NA row/s and fix p-value if due to machine error at zero change in deviance
+    ## Note flp1 range from 1 to 4 but anovatabq has 5 rows, therefore [flp1 + 1] look up is used
+    for (flp1 in NARows) {
+      
+      if (abs(anovatabq$"Deviance"[flp1+1]) < 1e-10) {
+        ## Very small change in deviance - must have a wrong sign to give NA p-value
+        anovatabq$"Pr(>F)"[flp1+1] <- 1
+      } else {
+        stop(cat('Missing p-value in ANOVA table for m1 to m4.\n'
+                 , 'Check', svar, 'in', varname
+                 , '\n'
+                 )
+             )
+      }
+    }
+  }
 
   ## Select the "best" model out of the basic four in the lattice
   ##
@@ -372,81 +371,81 @@ qlstrendflags <- function(fqpmods, svar, varname){
   ##                           m4 constant
   ##
 
-	if (anovatabq[5, "Pr(>F)"]<0.05) { 
-		
-		#  m1 beats m3, next test m1 vs m2
-		if (anovatabq[2, "Pr(>F)"]<0.05) { 
-			#  m1 beats m2, choose m1
-			modsel <- "qp1"
-		} else { # Otherwise  m2 is OK, test whether m4 is just as good
-			if (anovatabq[3, "Pr(>F)"]<0.05) {
-				# m2 beats m4, choose m2
-				modsel <- "qp2"
-			} else { # Otherwise, m4 is OK, choose m4, *** even though m1 vs m3 was signif, but we have m1 to m2 to m4 not signif
-				modsel <- "qp4"  
-			}
-		}
-		
-	} else {  # m3 as good as m1, next test m3 vs m4
-		
-		if (anovatabq[2, "Pr(>F)"]<0.05) {
-		
-			# m1 beats m2, next test m3 vs m4
-			if (anovatabq[4, "Pr(>F)"]<0.05) {
-				# m3 beats m4, choose m3
-				modsel <- "qp3"
-			} else {  # Otherwise  m4 as good as m3, choose m4, *** even though m1 vs m2 was signif, but we have m1 to m3 to m4 not signif
-				modsel <- "qp4"
-			}
-			
-		} else { # Otherwise either of m2 or m3 is OK; both lastspecial and trend are (individually) NS in m1; 
-			
-			#which term appears "least significant" and should be dropped first?
-			if (anovatabq[5, "Pr(>F)"] > anovatabq[2, "Pr(>F)"]) {
-			
-				# m3 "better" than m2; proceed from m3 and test m3 vs m4
-				if (anovatabq[4, "Pr(>F)"]<0.05) {
-					# m3 beats m4, choose m3
-					modsel <- "qp3"
-				} else {
-					# m4 as good as m3, choose m4
-					modsel <- "qp4"
-				}
-				
-			} else {  # Otherwise  m2 "better" than m3; proceed from m2 and test m2 vs m4
-				if (anovatabq[3, "Pr(>F)"]<0.05) {
-					# m2 beats m4, choose m2
-					modsel <- "qp2"
-				} else {
-					# m4 as good as m2, choose m4
-					modsel <- "qp4"
-				}
-			}
-		}
-	}
+  if (anovatabq[5, "Pr(>F)"]<0.05) { 
+    
+    #  m1 beats m3, next test m1 vs m2
+    if (anovatabq[2, "Pr(>F)"]<0.05) { 
+      #  m1 beats m2, choose m1
+      modsel <- "qp1"
+    } else { # Otherwise  m2 is OK, test whether m4 is just as good
+      if (anovatabq[3, "Pr(>F)"]<0.05) {
+        # m2 beats m4, choose m2
+        modsel <- "qp2"
+      } else { # Otherwise, m4 is OK, choose m4, *** even though m1 vs m3 was signif, but we have m1 to m2 to m4 not signif
+        modsel <- "qp4"  
+      }
+    }
+    
+  } else {  # m3 as good as m1, next test m3 vs m4
+    
+    if (anovatabq[2, "Pr(>F)"]<0.05) {
+    
+      # m1 beats m2, next test m3 vs m4
+      if (anovatabq[4, "Pr(>F)"]<0.05) {
+        # m3 beats m4, choose m3
+        modsel <- "qp3"
+      } else {  # Otherwise  m4 as good as m3, choose m4, *** even though m1 vs m2 was signif, but we have m1 to m3 to m4 not signif
+        modsel <- "qp4"
+      }
+      
+    } else { # Otherwise either of m2 or m3 is OK; both lastspecial and trend are (individually) NS in m1; 
+      
+      #which term appears "least significant" and should be dropped first?
+      if (anovatabq[5, "Pr(>F)"] > anovatabq[2, "Pr(>F)"]) {
+      
+        # m3 "better" than m2; proceed from m3 and test m3 vs m4
+        if (anovatabq[4, "Pr(>F)"]<0.05) {
+          # m3 beats m4, choose m3
+          modsel <- "qp3"
+        } else {
+          # m4 as good as m3, choose m4
+          modsel <- "qp4"
+        }
+        
+      } else {  # Otherwise  m2 "better" than m3; proceed from m2 and test m2 vs m4
+        if (anovatabq[3, "Pr(>F)"]<0.05) {
+          # m2 beats m4, choose m2
+          modsel <- "qp2"
+        } else {
+          # m4 as good as m2, choose m4
+          modsel <- "qp4"
+        }
+      }
+    }
+  }
 
   ## set the last special and trend flags based on the selected model
   if (modsel=="qp1") {
     lsflag <- ifelse(summary(fqpmods$qp1)$coefficients["lastspecial", "Estimate"]>0
                      , ifelse(anovatabq[5, "Pr(>F)"]<0.01, 1, 2)
                      , ifelse(anovatabq[5, "Pr(>F)"]<0.01, 5, 4)
-										 )
+                     )
     trendflag <- ifelse(summary(fqpmods$qp1)$coefficients["trend", "Estimate"]>0
-												, "up", "down"
-												)
+                        , "up", "down"
+                        )
   }
   if (modsel=="qp2") {
     lsflag <- ifelse(summary(fqpmods$qp2)$coefficients["lastspecial", "Estimate"]>0
                      , ifelse(anovatabq[3, "Pr(>F)"]<0.01, 1, 2)
                      , ifelse(anovatabq[3, "Pr(>F)"]<0.01, 5, 4)
-										 )
+                     )
     trendflag <- "-"
   }
   if (modsel=="qp3") {
     lsflag <- 3
     trendflag <- ifelse(summary(fqpmods$qp1)$coefficients["trend", "Estimate"]>0
-												, "up", "down"
-												)
+                        , "up", "down"
+                        )
   }
   if (modsel == "qp4") {
     lsflag <- 3
@@ -454,11 +453,11 @@ qlstrendflags <- function(fqpmods, svar, varname){
   }
 
   return(list(lsflag=lsflag
-							, trendflag=trendflag
-							, anovatabq=anovatabq
-							, modsel=modsel
-							)
-				)
+              , trendflag=trendflag
+              , anovatabq=anovatabq
+              , modsel=modsel
+              )
+        )
 }
 
 ##        m1 trend + lastspecial
@@ -494,16 +493,16 @@ qlstrendflags <- function(fqpmods, svar, varname){
 ## 16 - excluding the last quarter is m4, including the last quarter is m4
 
 ## In the excel template lookup
-# Last Quarter Changes Pattern	Last Quarter Changes Pattern
-# 1	                                                 Had Trend + LS
-# 2	                                                 Had Trend + LS
-# 3	                                                 Had Trend + LS
-# 4	                                                 Had Trend + LS
-# 5	                                                 Had LS
-# 6	                                                 Had LS
-# 7	                                                 Had LS
-# 8	                                                 Had LS
-# 9	                                                 
+# Last Quarter Changes Pattern  Last Quarter Changes Pattern
+# 1                                                   Had Trend + LS
+# 2                                                   Had Trend + LS
+# 3                                                   Had Trend + LS
+# 4                                                   Had Trend + LS
+# 5                                                   Had LS
+# 6                                                   Had LS
+# 7                                                   Had LS
+# 8                                                   Had LS
+# 9                                                   
 # 10                                                   Had Trend
 # 11                                                    
 # 12                                                   Had Trend
@@ -530,44 +529,44 @@ lqtrchange <- function(dat, fvarname, pdist, lstrendflagsmods, fexposuredat){
     ## investigating if the last quarter changes the pattern
     lastqrtchangflag <- ifelse(lstrendflagssl$modsel == "p1"
            #if true (i.e. if we exclude the last quarter we get trend and ls)
-					 # we next look at model including last quarter
+           # we next look at model including last quarter
            , ifelse(lstrendflagsmods$modsel == "p1", 1
-										, ifelse(lstrendflagsmods$modsel == "p2", 2
-														 , ifelse(lstrendflagsmods$modsel == "p3", 3, 4)
-														)
-									 )
-					 #if false (i.e. if we exclude the last quarter we don't get both trend and ls)
+                    , ifelse(lstrendflagsmods$modsel == "p2", 2
+                             , ifelse(lstrendflagsmods$modsel == "p3", 3, 4)
+                            )
+                   )
+           #if false (i.e. if we exclude the last quarter we don't get both trend and ls)
            , ifelse(lstrendflagssl$modsel == "p2"
-										#if true (i.e. if we exclude the last quarter we get ls but no trend)
-										# we next look at model including last quarter
-										, ifelse(lstrendflagsmods$modsel == "p1", 5
-														 , ifelse(lstrendflagsmods$modsel == "p2", 6
-																			, ifelse(lstrendflagsmods$modsel == "p3", 7, 8)
-																			)
-														)
-										#if false
-										, ifelse(lstrendflagssl$modsel == "p3"
-														 #if true (i.e. if we exclude the last quarter we get trend but no ls)
-														 # we next look at model including last quarter
-														 , ifelse(lstrendflagsmods$modsel == "p1", 9
-																			, ifelse(lstrendflagsmods$modsel == "p2", 10
-																							 , ifelse(lstrendflagsmods$modsel == "p3", 11, 12)
-																							 )
-																			)
-														 #if false (i.e. if we exclude the last quarter we get no trend and no ls)
-														 # we next look at model including last quarter
-														 , ifelse(lstrendflagsmods$modsel == "p1", 13
-																			, ifelse(lstrendflagsmods$modsel == "p2", 14
-																							 , ifelse(lstrendflagsmods$modsel == "p3", 15, 16)
-																							 )
-																			)
-														)
-										)
-		)
-		
-		## Make generic second last special model object for plotting
-		mod_secondlast <- pmods_secondlast[[lstrendflagssl$modsel]]
-		
+                    #if true (i.e. if we exclude the last quarter we get ls but no trend)
+                    # we next look at model including last quarter
+                    , ifelse(lstrendflagsmods$modsel == "p1", 5
+                             , ifelse(lstrendflagsmods$modsel == "p2", 6
+                                      , ifelse(lstrendflagsmods$modsel == "p3", 7, 8)
+                                      )
+                            )
+                    #if false
+                    , ifelse(lstrendflagssl$modsel == "p3"
+                             #if true (i.e. if we exclude the last quarter we get trend but no ls)
+                             # we next look at model including last quarter
+                             , ifelse(lstrendflagsmods$modsel == "p1", 9
+                                      , ifelse(lstrendflagsmods$modsel == "p2", 10
+                                               , ifelse(lstrendflagsmods$modsel == "p3", 11, 12)
+                                               )
+                                      )
+                             #if false (i.e. if we exclude the last quarter we get no trend and no ls)
+                             # we next look at model including last quarter
+                             , ifelse(lstrendflagsmods$modsel == "p1", 13
+                                      , ifelse(lstrendflagsmods$modsel == "p2", 14
+                                               , ifelse(lstrendflagsmods$modsel == "p3", 15, 16)
+                                               )
+                                      )
+                            )
+                    )
+    )
+    
+    ## Make generic second last special model object for plotting
+    mod_secondlast <- pmods_secondlast[[lstrendflagssl$modsel]]
+    
   }
   if (pdist=="quasipoisson"){
     qpmods_secondlast <- qpoissonmods(dat_nolqtr
@@ -579,48 +578,48 @@ lqtrchange <- function(dat, fvarname, pdist, lstrendflagsmods, fexposuredat){
     lastqrtchangflag <- ifelse(lstrendflagssl$modsel == "qp1"
            #if true
            , ifelse(lstrendflagsmods$modsel == "qp1", 1
-										, ifelse(lstrendflagsmods$modsel == "qp2", 2
-														 , ifelse(lstrendflagsmods$modsel == "qp3", 3, 4)
-														 )
-										)
+                    , ifelse(lstrendflagsmods$modsel == "qp2", 2
+                             , ifelse(lstrendflagsmods$modsel == "qp3", 3, 4)
+                             )
+                    )
            #if false
            , ifelse(lstrendflagssl$modsel == "qp2"
-										#if true
-										, ifelse(lstrendflagsmods$modsel == "qp1", 5
-														 , ifelse(lstrendflagsmods$modsel == "qp2", 6
-																			, ifelse(lstrendflagsmods$modsel == "qp3", 7, 8)
-																			)
-														)
-										#if false
-										, ifelse(lstrendflagssl$modsel == "qp3"
-														 #if true
-														 , ifelse(lstrendflagsmods$modsel == "qp1", 9
-																			, ifelse(lstrendflagsmods$modsel == "qp2", 10
-																							 , ifelse(lstrendflagsmods$modsel == "qp3", 11, 12)
-																							 )
-																			)
-														 #if false
-														 , ifelse(lstrendflagsmods$modsel == "qp1", 13
-																			, ifelse(lstrendflagsmods$modsel == "qp2", 14
-																							 , ifelse(lstrendflagsmods$modsel == "qp3", 15, 16)
-																							 )
-																			)
-														)
-										)
-		)
-		
-		## Make generic second last special model object for plotting
-		mod_secondlast <- qpmods_secondlast[[lstrendflagssl$modsel]]
-		
+                    #if true
+                    , ifelse(lstrendflagsmods$modsel == "qp1", 5
+                             , ifelse(lstrendflagsmods$modsel == "qp2", 6
+                                      , ifelse(lstrendflagsmods$modsel == "qp3", 7, 8)
+                                      )
+                            )
+                    #if false
+                    , ifelse(lstrendflagssl$modsel == "qp3"
+                             #if true
+                             , ifelse(lstrendflagsmods$modsel == "qp1", 9
+                                      , ifelse(lstrendflagsmods$modsel == "qp2", 10
+                                               , ifelse(lstrendflagsmods$modsel == "qp3", 11, 12)
+                                               )
+                                      )
+                             #if false
+                             , ifelse(lstrendflagsmods$modsel == "qp1", 13
+                                      , ifelse(lstrendflagsmods$modsel == "qp2", 14
+                                               , ifelse(lstrendflagsmods$modsel == "qp3", 15, 16)
+                                               )
+                                      )
+                            )
+                    )
+    )
+    
+    ## Make generic second last special model object for plotting
+    mod_secondlast <- qpmods_secondlast[[lstrendflagssl$modsel]]
+    
   }
   
   SecondLastSpecial <- lstrendflagssl$lsflag
-	
+  
   return(list(lastqrtchangflag=lastqrtchangflag
-							, SecondLastSpecial=SecondLastSpecial
-							, mod_secondlast = mod_secondlast
-							)
-				)
+              , SecondLastSpecial=SecondLastSpecial
+              , mod_secondlast = mod_secondlast
+              )
+        )
 }
 
 ### FUNCTION: change in level 
@@ -637,12 +636,12 @@ bp <- function(dat, fvarname, pdist, allmods, fexposuredat){
   
   for(lpbps in candidatebps){
     if (fexposuredat==TRUE) {
-      m5 <- glm(paste0(fvarname, "~I(dat$trend>", lpbps, ") + offset(lexposure)")
+      m5 <- glm(paste0(fvarname, "~I(trend>", lpbps, ") + offset(lexposure)")
                 , family=pdist
                 , data=dat
                 )
     } else {
-      m5 <- glm(paste0(fvarname, "~I(dat$trend>", lpbps, ")")
+      m5 <- glm(paste0(fvarname, " ~ I(trend >", lpbps, ")")
                 , family=pdist
                 , data=dat
                 )
@@ -658,16 +657,16 @@ bp <- function(dat, fvarname, pdist, allmods, fexposuredat){
   m5.bps <- tries$bps[order(tries$deviance)[1]]
   
   # Refit the optimal  model:
-  # m5.wrongdf <- glm(paste0(fvarname, "~I(dat$trend>m5.bps)")
+  # m5.wrongdf <- glm(paste0(fvarname, "~I(trend>m5.bps)")
   # , family=pdist, data=dat
   # )
   if (fexposuredat==TRUE) {
-    m5 <- glm(paste0(fvarname, "~I(dat$trend>", m5.bps, ") + offset(lexposure)")
+    m5 <- glm(paste0(fvarname, "~I(trend>", m5.bps, ") + offset(lexposure)")
               , family=pdist
               , data=dat
     )
   } else {
-    m5 <- glm(paste0(fvarname, "~I(dat$trend>", m5.bps, ")")
+    m5 <- glm(paste0(fvarname, " ~ I(trend > ", m5.bps, ")")
               , family=pdist
               , data=dat
     )
@@ -779,19 +778,19 @@ seasonal <- function(dat, allmods, pdist){
   
 
   ## extract pval using colvar - na.rm = T inserted to account for a very rare case where the change in deviance was
-	## essentially zero but machine error put it on the wrong side of zero, yielding an NA p-value from the anova.
+  ## essentially zero but machine error put it on the wrong side of zero, yielding an NA p-value from the anova.
   seaspval <- min(seaspval1, seaspval2, seaspval3, seaspval4, na.rm=T)
   
   
 
-	seasmod_list <- c('m10', 'm9', 'm8', 'm7')
-	pval_list <- c(seaspval1, seaspval2, seaspval3, seaspval4)
-	bestseasmod <- seasmod_list[max(which(pval_list == seaspval))]
-	
+  seasmod_list <- c('m10', 'm9', 'm8', 'm7')
+  pval_list <- c(seaspval1, seaspval2, seaspval3, seaspval4)
+  bestseasmod <- seasmod_list[max(which(pval_list == seaspval))]
+  
   return(list(seaspval=seaspval, bestseasmod=bestseasmod
-							, m10=m10, m9=m9, m8=m8, m7=m7
-							)
-				 )
+              , m10=m10, m9=m9, m8=m8, m7=m7
+              )
+         )
 }
 
 ## only investigate if the dispersion changed if quasipoisson models were fitted

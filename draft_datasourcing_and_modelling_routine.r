@@ -19,14 +19,17 @@
 #     with this program; if not, write to the Free Software Foundation, Inc.,
 #     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-suppressPackageStartupMessages(library(gdata))        ## needed for rename.vars
 suppressPackageStartupMessages(library(pscl))         ## needed for zeroinfl
 suppressPackageStartupMessages(library(zoo))
 suppressPackageStartupMessages(library(strucchange))  ## need for breakpoints
-library(lubridate)    ## Parse date strings
+library(plyr)
+suppressPackageStartupMessages(library(lubridate))    ## Parse date strings
+library(tidyr)
+library(svglite)
+library(yaml)
 
 szIndir <- 'inputs/'
-szOutdir <- 'outputs/'
+szOutdir <- paste0('outputs/', format(Sys.time(), '%Y%m%d_%H%M'), "/")
 szFunctionsdir <- 'subroutines_and_functions/'
 
 stopifnot(dir.exists(szIndir))
@@ -37,147 +40,176 @@ if (!dir.exists(szOutdir)) {
 }
 
 ##
+## Read configuration
+##
+
+config <- read_yaml("PETA.yaml")
+
+# We can only process one source at a time - configure with this variable.
+# TODO - See if we can process multiple sources in one run.
+
+source <- 'ASIR'
+
+##
 ## Read input files
 ##
-
-dfOcc <- read.csv(paste0(szIndir, 'OCCURRENCE.csv'), stringsAsFactors = FALSE)
-dfOccType <- read.csv(paste0(szIndir, 'OCCURRENCE TYPE.csv'), stringsAsFactors = FALSE)
-dfOccAC <- read.csv(paste0(szIndir, 'OCCURRENCE AIRCRAFT.csv'), stringsAsFactors = FALSE)
-
+## Where the configuration file includes extra information for a file, these operations are applied.
 ##
-## DO NOT use this tool to analyse numerical data; the regression is performed on the sum of the
-## values which is unlikely to be what you want. You can derive a new column from the numerical data
-## which is probably what you wanted in the first place.
-##
-## In this example the "Number of People who Sustained a Fatality" is used to create a new "isFatal"
-## column which has the values "IS_FATAL" or "NOT_FATAL".
-##
-dfOcc$isFatal <- ifelse(dfOcc$Occurrence.Total.Injury.Fatal > 0, "IS_FATAL", "NOT_FATAL")
-dfOcc[is.na(dfOcc$isFatal), "isFatal"] <- "NOT_FATAL"
+l_ply(names(config[[c(source,'Input')]]), function(input) {
+  stopifnot(file.exists(paste0(szIndir, config[[c(source,'Input',input,'Filename')]])))
+  
+  tmp <- read.csv(paste0(szIndir, config[[c(source,'Input',input,'Filename')]]), stringsAsFactors = FALSE)
+  
+  ##
+  ## Identifier is used to nominate a field that should be used as the identifier.
+  ##
+  if (!is.null(config[[c(source,'Input',input,'Identifier')]])) {
+    colnames(tmp)[match(config[[c(source,'Input',input,'Identifier')]], colnames(tmp))] <- config[[c(source,'Identifier')]]
+  }
+  
+  ##
+  ## ConcatField is used to concatenate columns of data into one field.
+  ##
+  if (!is.null(config[[c(source,'Input',input,'ConcatField')]])) {
+    for (field in names(config[[c(source,'Input',input,'ConcatField')]])) {
+      tmp <- unite(
+        tmp,
+        !!field,
+        config[[c(source,'Input',input,'ConcatField',field,'Field')]],
+        sep = config[[c(source,'Input',input,'ConcatField',field,'Separator')]],
+        remove = FALSE
+      )
+    }
+  }
+  
+  ##
+  ## MapValues is used to map rubbish data to cleansed values.
+  ##
+  if (!is.null(config[[c(source,'Input',input,'MapValues')]])) {
+    for (field in names(config[[c(source,'Input',input,'MapValues')]])) {
+      
+      fieldMap <- unlist(lapply(names(config[[c(source,'Input',input,'MapValues',field)]]), function(manu) {
+        x <- character(length = length(config[[c(source,'Input',input,'MapValues',field,manu)]]))
+        names(x) <- config[[c(source,'Input',input,'MapValues',field,manu)]]
+        x[TRUE] <- manu
+        return(x)
+      }))
+      
+      tmp[tmp[,field] %in% names(fieldMap), field] <- fieldMap[tmp[tmp[,field] %in% names(fieldMap), field]]
+    }
+  }
+  
+  assign(input, tmp, envir = .GlobalEnv)
+})
 
-##
-## If we were to use the isFatal column then we are probably not interested in "NOT_FATAL" occurrences
-## and would need to filter those out...
-##
+###
+### Get the start and end dates from the configuration
+### Filter the occurrence data by date.
+###
 
-# dfOcc <- dfOcc[dfOcc$isFatal == "IS_FATAL", ]
+endDate <- ymd(config[[c(source,'Date','End')]])
+if (is.null(config[[c(source,'Date','Start')]])) {
+  startDate <- endDate - months(60)
+} else {
+  startDate <- ymd(config[[c(source,'Date','Start')]])
+}
 
-##
-## Define the date range for subsetting the data. Note that this software was
-## developed on the assumption that 20 quarters would be used.
-##
+dfOcc$Date <- as.Date(dfOcc[, config[[c(source,'Date','Field')]]], format = config[[c(source,'Date','Format')]])
+dfOcc <- dfOcc[dfOcc$Date > startDate & dfOcc$Date <= endDate, ]
 
-endDate <- ymd("2018-06-30")
-startDate <- endDate - months(60)
+quarters <- seq(from = startDate, to = endDate, by = "3 months")
 
-dfOcc$Date <- as.Date(dmy_hm(dfOcc$Occurrence.Date.and.Time))
+dfOcc$yr_Q <- cut(dfOcc$Date, breaks = quarters, right = TRUE)
 
-dfOcc <- dfOcc[dfOcc$Date >= startDate & dfOcc$Date <= endDate, ]
-dfOccAC <- dfOccAC[dfOccAC$Occurrence.ID %in% dfOcc$Occurrence.ID, ]
-dfOccType <- dfOccType[dfOccType$Occurrence.ID %in% dfOcc$Occurrence.ID, ]
+## Filter the other data.frames by Identifier
 
+dfOccType <- dfOccType[dfOccType[, config[[c(source,'Identifier')]]] %in% dfOcc[, config[[c(source,'Identifier')]]], ]
+dfOccAC <- dfOccAC[dfOccAC[, config[[c(source,'Identifier')]]] %in% dfOcc[, config[[c(source,'Identifier')]]], ]
 
-#    --------------------------    OCCURRENCE data preparation   ---------------------------------------    #
+## Add the yr_Q column to the other data.frames
 
-## extract a subset of Occurrence ID and corresponding calendar year + quarter 
-dfOccDT <- dfOcc[, c('Occurrence.ID'
-										, 'Occurrence.Calendar.Year'
-										, 'Occurrence.Calendar.Quarter'
-										)
-								]
-dfOccDT <- dfOccDT[order(dfOccDT$Occurrence.Calendar.Year
-												 , dfOccDT$Occurrence.Calendar.Quarter
-												 )
-									 ,]
-## Concatenate Year and Quarter to create year_Q tags for each occurrence
-dfOccDT$yr_Q <- paste0(dfOccDT$Occurrence.Calendar.Year, '_'
-											 , dfOccDT$Occurrence.Calendar.Quarter
-											 )
+dfOccType <- merge(dfOccType, dfOcc[,c(config[[c(source,'Identifier')]],"yr_Q")], by = config[[c(source,'Identifier')]], all.x=T)
+dfOccAC <- merge(dfOccAC, dfOcc[,c(config[[c(source,'Identifier')]],"yr_Q")], by = config[[c(source,'Identifier')]], all.x=T)
 
-################################
-## Merge dfOccDT to dfOcc, dfOccType and dfOccAC
+###
+### Peform source-specific munging of the data.
+###
 
-dfOcc <- merge(dfOcc, dfOccDT[, c('Occurrence.ID', 'yr_Q')], by = 'Occurrence.ID')
+if (source == 'CIRRIS') {
+  dfOcc <- dfOcc[!(is.na(dfOcc$Occurrence.Report.Number) | dfOcc$Occurrence.Date == ""), ]
+  
+  dfOccType <- separate(
+    dfOccType,
+    Occurrence.Type...Temporary.Key,
+    into = c("Occurrence.Report.Number","Occurrence.Type...Key"),
+    sep = 11
+  )
 
-dfOccType <- merge(dfOccType, dfOccDT, by = 'Occurrence.ID', all.x=T)
+  dfOccAC[dfOccAC$VH.Aircraft...Registered.Operator.Name..Derived. == "", "VH.Aircraft...Registered.Operator.Name..Derived."] <- "UNKNOWN"
 
-dfOccAC <- merge(dfOccAC, dfOccDT, by = 'Occurrence.ID', all.x=T)
+} else if (source == 'ASIR') {
 
-################################
-## So far we know that occurrence type description levels have to be concatenated into single variable. 
-## More programmatical approach will be required if there are more variables to be derived from a combination of existing 
-## variables.
-arOTDesc <- sub(' : $', ''
-								, paste(dfOccType$Occurrence.Type.Description.Level.1
-												, dfOccType$Occurrence.Type.Description.Level.2
-												, dfOccType$Occurrence.Type.Description.Level.3
-												, sep = ' : '
-												)
-								)
-dfOccType$Occurrence.Type.Description <- arOTDesc
-
-dfOccType <- dfOccType[dfOccType$Occurrence.Type.Description != " : ", ]
-
-################################
-## Examples on deriving other possible combined variables
-
-## CASA Sector
-
-dfOccAC$Aircraft.Sector.Full <- paste(
-  dfOccAC$Aircraft.Mapped.CASA.Segment,
-  dfOccAC$Aircraft.Mapped.CASA.Sector,
-  dfOccAC$Aircraft.Mapped.CASA.Sector.Class,
-  sep = "_"
-)
-
-## Full aircraft operation type - combine the main and sub type information
-dfOccAC$Aircraft.Operation.Type.Full <- paste(dfOccAC$Aircraft.Operation.Type
-																							, dfOccAC$Aircraft.Operation.Sub.Type
-																							, sep = '_'
-																							)
-
-## Aircraft Altitude - combination of Estimate type and actual value
-arEstAlt <- paste0(dfOccAC$Aircraft.Altitude.Estimate.Type
-									 , ifelse(is.na(dfOccAC$Aircraft.Altitude.Value)
-													  , '', paste0(' ', dfOccAC$Aircraft.Altitude.Value)
-													  )
-									 )
-arEstAlt <- ifelse(arEstAlt == '', NA, arEstAlt)
-dfOccAC$Aircraft.Altitude.Est.TypeValue <- arEstAlt
-
-## Full aircraft airspace type - append description for type = "Other" if available
-arAATypeFull <- paste0(dfOccAC$Aircraft.Airspace.Type
-											 , ifelse(dfOccAC$Aircraft.Airspace.Type == 'Other'
-																, paste0('_', dfOccAC$Aircraft.Airspace.Type.Other.Description)
-																, ''
-																)
-											 )
-dfOccAC$Aircraft.Airspace.Type.Full <- arAATypeFull
-
-## Full aircraft airspace class type - append description for type = "Other" if available
-arACTypeFull <- paste0(dfOccAC$Aircraft.Airspace.Class.Type
-											 , ifelse(dfOccAC$Aircraft.Airspace.Class.Type == 'Other'
-																, paste0('_', dfOccAC$Aircraft.Airspace.Class.Other.Description)
-																, ''
-																)
-											 )
-dfOccAC$Aircraft.Airspace.Class.Type.Full <- arACTypeFull
-
+  dfOcc$isFatal <- ifelse(dfOcc$Occurrence.Highest.Injury.Level == "Fatal", "IS_FATAL", "NOT_FATAL")
+  
+  dfOccType$Occurrence.Type.Description <- sub(' : $', '', dfOccType$Occurrence.Type.Description)
+  
+  dfOccType <- dfOccType[dfOccType$Occurrence.Type.Description != " : ", ]
+  
+  ## Aircraft Altitude - combination of Estimate type and actual value
+  arEstAlt <- paste0(
+    dfOccAC$Aircraft.Altitude.Estimate.Type
+    , ifelse(
+      is.na(dfOccAC$Aircraft.Altitude.Value)
+      , '', paste0(' ', dfOccAC$Aircraft.Altitude.Value)
+    )
+  )
+  arEstAlt <- ifelse(arEstAlt == '', NA, arEstAlt)
+  dfOccAC$Aircraft.Altitude.Est.TypeValue <- arEstAlt
+  
+  ## Full aircraft airspace type - append description for type = "Other" if available
+  dfOccAC$Aircraft.Airspace.Type.Full <- paste0(
+    dfOccAC$Aircraft.Airspace.Type
+    , ifelse(
+      dfOccAC$Aircraft.Airspace.Type == 'Other'
+      , paste0('_', dfOccAC$Aircraft.Airspace.Type.Other.Description)
+      , ''
+    )
+  )
+  
+  ## Full aircraft airspace class type - append description for type = "Other" if available
+  dfOccAC$Aircraft.Airspace.Class.Type.Full <- paste0(
+    dfOccAC$Aircraft.Airspace.Class.Type
+    , ifelse(
+      dfOccAC$Aircraft.Airspace.Class.Type == 'Other'
+      , paste0('_', dfOccAC$Aircraft.Airspace.Class.Other.Description)
+      , ''
+    )
+  )
+  
+  dfOccAC$Aircraft.Engine.Manufacturer <- toupper(trimws(gsub('"', "", dfOccAC$Aircraft.Engine.Manufacturer)))
+  dfOccAC$Aircraft.Engine.Manufacturer <- ifelse(dfOccAC$Aircraft.Engine.Manufacturer %in% c("","1","UNKNO"),"UNKNOWN",dfOccAC$Aircraft.Engine.Manufacturer)
+  dfOccAC$Aircraft.Engine.Manufacturer <- ifelse(dfOccAC$Aircraft.Engine.Manufacturer == "AIRCRAFT NOT FITTED WITH ENGINE", "N/A", dfOccAC$Aircraft.Engine.Manufacturer)
+  dfOccAC$Aircraft.Engine.Type <- toupper(trimws(dfOccAC$Aircraft.Engine.Type))
+  dfOccAC$Aircraft.Engine.Type <- ifelse(dfOccAC$Aircraft.Engine.Type == "", "UNKNOWN", dfOccAC$Aircraft.Engine.Type)
+  
+  ## Underscore and less/greater than signs cannot be used in formulas
+  
+  dfOccAC[dfOccAC$Aircraft.Mapped.ICAO.Type.Designator == "_UAV", "Aircraft.Mapped.ICAO.Type.Designator"] <- "XUAVX"
+  dfOccAC[dfOccAC$Aircraft.Mapped.ICAO.Type.Designator == "<UK>", "Aircraft.Mapped.ICAO.Type.Designator"] <- "XUNKX"
+  
+  ## Create an aerodrome column
+  
+  dfOcc$Aerodrome.Distance.to.Occurrence.NM <- sub(",","", dfOcc$Aerodrome.Distance.to.Occurrence.NM)
+  dfOcc$Aerodrome.Distance.to.Occurrence.NM <- as.numeric(dfOcc$Aerodrome.Distance.to.Occurrence.NM)
+  dfOcc$Aerodrome <- ifelse(dfOcc$Aerodrome.Distance.to.Occurrence.NM < 10, dfOcc$Aerodrome.Name, "MORE THAN TEN NM")
+} else {
+  stop('Unknown source')
+}
 
 #   --------------------------    Collation of all data frames into a list   ---------------------------------------    #
 
 ## Collate into list
-lzOcc <- list(dfOcc = dfOcc
-							, dfOccType = dfOccType
-							, dfOccAC = dfOccAC
-							)
-
-# ## Save workspace for future reference/back up
-# save.image(paste0('data_loading_done_'
-# 									, format(Sys.Date(), '%Y%m%d')
-# 									, '.RData'
-# 									)
-# 					)
+lzOcc <- list(dfOcc = dfOcc, dfOccType = dfOccType, dfOccAC = dfOccAC)
 
 ## Setting up dummy exposure data as an example
 ## Note that this exposure data assumes that the timeframe starts 1st quarter and finishes 4th quarter.
@@ -187,19 +219,42 @@ lzOcc <- list(dfOcc = dfOcc
 ## or Airservices Australia data on movements at a particular aerodrome.) This tool will use the exposure
 ## data for every combination of variables so the analyst must be mindful of what combinations make sense.
 
-yearRange <- seq(year(startDate), year(endDate))
-
-exposuredat <- data.frame(year = rep(yearRange, each = 4),
-                          quarter = rep(1:4, times = length(yearRange)),
-                          exposure = seq_len(length(yearRange) * 4))
-
-#   --------------------------     TREND ANALYSIS TOOL  ------------------------------------    #
+# yearRange <- seq(year(startDate), year(endDate))
+# 
+# exposuredat <- data.frame(year = rep(yearRange, each = 4),
+#                           quarter = rep(1:4, times = length(yearRange)),
+#                           exposure = seq_len(length(yearRange) * 4))
 
 ## Load required functions
 source(paste0(szFunctionsdir, 'DFBuild.r'))
 source(paste0(szFunctionsdir, 'PatchVarname.r'))
 source(paste0(szFunctionsdir, 'Modelling_functions.r'))
 source(paste0(szFunctionsdir, 'RunTAnalysis.r'))
+
+# This function copied from the package "gdata" to remove the dependency on that package.
+# A few small tweaks have been made to simplify the function.
+
+rename.vars <- function(data, from = "", to = "", debug = FALSE) {
+  stopifnot(length(from) == length(to))
+  dfn <- names(data)
+  stopifnot(length(dfn) >= length(to))
+  
+  chng <- match(from, dfn)
+  
+  stopifnot(all(from %in% dfn))
+  if (debug) {
+    cat(to, sep = "\n")
+    cat("---")
+  }
+  stopifnot(length(to) == length(unique(to)))
+  
+  dfn.new <- dfn
+  dfn.new[chng] <- to
+  
+  names(data) <- dfn.new
+  
+  return(data)
+}
 
 #  --------------- Trend analysis procedures  -----------------#
 ## Step 1:  Generate a table of counts by the variable of interest for each quarterly period
@@ -214,35 +269,50 @@ source(paste0(szFunctionsdir, 'RunTAnalysis.r'))
 ## 			 datfrm to replace such characters with acceptable ones.
 ## Step 3:  Run trend analysis function - This function saves a table of flags in its raw format in a CSV format to the 
 ## 			 directory specified by the user as fOutdir.  
-## Step 4:  Convert the raw output file to the final output table with "trend_analysis_output_generator.xlsm".
+## Step 4:  Convert the raw output file to the final output table with Shiny app.
 #  -------------------------------------------------------------------- #
 
-## Example 1:  analysing the trend in the number of poeple who sustained a fatality
-##  Step 1:  Data frame building
-fnDFBuild(fVarlist = c('Aircraft.Sector.Full', 'Occurrence.Category.Type')
-          , fVarClass = c('character', 'character')
-          , fDFList = lzOcc
-          , fRefID = "Occurrence.ID"
-          , fexposuredat = exposuredat
-					)
+l_ply(names(config[[c(source,'Analyse')]]), function(analysis) {
+  
+  analysisvars <- paste(config[[c(source,'Analyse')]][[analysis]]$variable, collapse='_by_')
+  
+  ##  Step 1:  Data frame building
+  DATA <- fnDFBuild(fVarlist = config[[c(source,'Analyse')]][[analysis]]$variable
+                    , fVarClass = config[[c(source,'Analyse')]][[analysis]]$class
+                    , fDFList = lzOcc
+                    , fRefID = config[[c(source,'Identifier')]]
+                    # , fexposuredat = exposuredat
+  )
+  
+  ## Step 2: 
+  ## Generate variable names that can be used in models
+  DATA$varname <- sapply(DATA$arVarvals, fnPatchVarname)
+  ## Rename variables
+  DATA$dat <- rename.vars(DATA$datfrm, DATA$arVarvals, DATA$varname)
+  
+  longData <- t(DATA$dat[, DATA$varname])
+  orderedVars <- rownames(longData)[order(rowSums(longData), decreasing = TRUE)]
+  
+  ## Step 3: Run trend analysis and generate table of tags
+  fnRunTAnalysis(
+    dat = DATA$dat
+    , varname = orderedVars
+    , fOutdir = szOutdir
+    , fanalysisvar = analysisvars
+    , fexposuredat = FALSE
+    , plotOutput = TRUE
+  )
+})
 
-# datfrm  ## Check data frame
-# arVarvals  ## Check the variables to analyse
+###
+### Combine all output files into a single file
+###
 
+output_files <- list.files(path = szOutdir, pattern = ".*csv", full.names = TRUE)
 
-## Step 2: 
-## Generate variable names that can be used in models
-varname <- sapply(arVarvals, FUN = fnPatchVarname)
-## Rename variables
-dat <- rename.vars(datfrm, arVarvals, varname)  
+output <- ldply(output_files, read.csv, stringsAsFactors = FALSE)
 
-## Step 3: Run trend analysis and generate table of tags
-tagtable0 <- fnRunTAnalysis(dat
-                           , varname
-                           , fOutdir = szOutdir
-                           , fanalysisvar = analysisvars
-                           , fexposuredat = FALSE
-                           )
-# tagtable0
+write.csv(output, file = paste0(szOutdir, "Output.csv"), row.names = FALSE)
 
-## Step 4: As stated above.
+cat(as.yaml(config), file = paste0(szOutdir, "PETA.yaml"))
+

@@ -17,19 +17,19 @@
 #
 
 fnPatchVarname <- function(x) {
-	
-	## replace colons with periods and spaces with underscore
-	x <- gsub(' ', '_', gsub(' : ', '\\.', x))
-	## replace '/' with word 'or'
-	x <- gsub('_*/_*', '_or_', x)
-	## replace hyphens with underscores - hyphens get interpretted as minus sign in formula
-	x <- gsub('-', '_', x)
-	## replace commas with underscores
-	x <- gsub(',', '.', x)
-	## remove brackets
-	x <- gsub('\\(|\\)', '', x)	
-	## replace ampersand (&) with word 'and'
-	x <- gsub('\\&', 'and', x)	
-	
-	return(x)
+  
+  ## replace colons with periods and spaces with underscore
+  x <- gsub(' ', '_', gsub(' : ', '\\.', x))
+  ## replace '/' with word 'or'
+  x <- gsub('_*/_*', '_or_', x)
+  ## replace hyphens with underscores - hyphens get interpretted as minus sign in formula
+  x <- gsub('-', '_', x)
+  ## replace commas with underscores
+  x <- gsub(',', '.', x)
+  ## remove brackets
+  x <- gsub('\\(|\\)', '', x)  
+  ## replace ampersand (&) with word 'and'
+  x <- gsub('\\&', 'and', x)  
+  
+  return(x)
 }

@@ -1,0 +1,234 @@
+CIRRIS:
+  Input:
+    dfOcc:
+      Filename: CIRRIS OCC.csv
+    dfOccType:
+      Filename: CIRRIS OCC TYPE.csv
+    dfOccAC:
+      Filename: CIRRIS OCC ACFT.csv
+      Identifier: Aircraft.Vehicle...Occurrence.Report.Number
+  Date:
+    End: '2018-11-30'
+    Field: Occurrence.Date
+    Format: '%e/%m/%y'
+  Identifier: Occurrence.Report.Number
+  Analyse:
+    Operator:
+      variable: VH.Aircraft...Registered.Operator.Name..Derived.
+      class: character
+    OccurrenceType:
+      variable: Occurrence.Type...Occurrence.Type
+      class: character
+    Location:
+      variable: Location.of.Occurrence..Name.
+      class: character
+    LocationOccurrenceType:
+      variable:
+      - Location.of.Occurrence..Name.
+      - Occurrence.Type...Occurrence.Type
+      class:
+      - character
+      - character
+    OperatorOccurrenceType:
+      variable:
+      - VH.Aircraft...Registered.Operator.Name..Derived.
+      - Occurrence.Type...Occurrence.Type
+      class:
+      - character
+      - character
+    OperatorLocation:
+      variable:
+      - VH.Aircraft...Registered.Operator.Name..Derived.
+      - Location.of.Occurrence..Name.
+      class:
+      - character
+      - character
+ASIR:
+  Input:
+    dfOcc:
+      Filename: OCCURRENCE.csv
+    dfOccType:
+      Filename: OCCURRENCE TYPE.csv
+      ConcatField:
+        Occurrence.Type.Description:
+          Field:
+          - Occurrence.Type.Description.Level.1
+          - Occurrence.Type.Description.Level.2
+          - Occurrence.Type.Description.Level.3
+          Separator: ' : '
+    dfOccAC:
+      Filename: OCCURRENCE AIRCRAFT.csv
+      ConcatField:
+        Aircraft.Sector.Full:
+          Field:
+          - Aircraft.Mapped.CASA.Segment
+          - Aircraft.Mapped.CASA.Sector
+          - Aircraft.Mapped.CASA.Sector.Class
+          Separator: '_'
+        Aircraft.Operation.Type.Full:
+          Field:
+          - Aircraft.Operation.Type
+          - Aircraft.Operation.Sub.Type
+          Separator: '_'
+      MapValues:
+        Aircraft.Engine.Manufacturer:
+          Pratt and Whitney Canada:
+          - P&W
+          - P&W CANADA
+          - Prastt and Whitney
+          - Pratt & Whitney
+          - PRATT & WHITNEY
+          - 'Pratt & Whitney '
+          - PRATT & WHITNEY AIRCRAFT
+          - Pratt & Whitney Canada
+          - PRATT & WHITNEY CANADA
+          - 'Pratt & Whitney Canada '
+          - PRATT & WHITNEY CANADA INC
+          - PRATT & WHITNEY CANADA, INC.
+          - PRATT & WHITNEY DIVISION
+          - 'Pratt & Whitney PW4000 '
+          - 'Pratt & Whittney '
+          - Pratt and Whitney
+          - PRATT AND WHITNEY
+          - 'Pratt and Whitney '
+          - 'PRATT AND WHITNEY '
+          - Pratt and Whitney Canada
+          - PRATT AND WHITNEY CANADA
+          - Pratt and Whittney
+          - PW
+          - PWC
+          Rolls Royce:
+          - Rolce-Royce
+          - Rolls Royce
+          - ROLLS ROYCE
+          - 'Rolls Royce '
+          - 'ROLLS ROYCE '
+          - ROLLS ROYCE CORPORATION
+          - ROLLS ROYCE LTD
+          - Rolls Royce Trent
+          - ROLLS ROYCE TRENT
+          - 'Rolls Royce Trent '
+          - 'ROLLS ROYCE TRENT '
+          - Rolls Royces
+          - Rolls Royse
+          - Rolls Royyce
+          - Rolls-Royce
+          - 'Rolls-Royce '
+          - Rolls-Royce Corporation
+          - ROLLS-ROYCE DEUTSCHLAND LTD & CO KG
+          - Rolls-Royce plc
+          - Rolls-Royce Trent
+          - RR
+          - RR Trent
+          - RR Trent XWB
+          Textron Lycoming:
+          - AVCO LYCOMING
+          - Lycoming
+          - 'Lycoming '
+          - 'LYCOMING '
+          - TEXTRON LYCOMING
+          - Textron-Lycoming
+          Continental Motors:
+          - CONT MOTOR
+          - Continental
+          - CONTINENTAL
+          - 'Continental '
+          - Continental Motor
+          - Continental Motors
+          - 'Continental Motors '
+          - CONTINENTAL MOTORS INC.
+          - Continential
+          - Teledyne Continental
+          - TELEDYNE-CONTINENTAL MOTORS
+          BRP Rotax:
+          - Rotax
+          - ROTAX
+          - 'Rotax '
+          - 'ROTAX '
+          - 'Rotax  '
+          - Rotax 912 ULS
+          - Rotax 912ULS
+          - Rotax 914UL
+          - Rotax Aircraft engines
+          - Rotax Aircraft Engines
+          - Rotax Bombardier
+          - Rotax GMBH
+          - ROTAX GMBH
+          - Bombadier Rotax
+          - Bombadier Rotax GMBH
+          - BOMBARDIER ROTAX LTD
+          - BOMBARDIER-ROTAX GMBH & CO KG
+          - BRP ROTAX
+          - BRP-ROTAX GMBH & CO. KG
+          - rotax
+          - Rotax - Bombardier
+          - Rotax 582
+          - BRP-Rotax
+          Jabiru Aircraft:
+          - jabiru
+          - Jabiru
+          - JABIRU
+          - "Jabiru "
+          - "JABIRU "
+          - Jabiru 3300A
+          - Jabiru Aircraft
+          - JABIRU AIRCRAFT
+          - Jabiru Aircraft Company
+          - JABIRU AIRCRAFT COMPANY
+          - JABIRU AIRCRAFT ENGINES
+          - Jabiru Aircraft Pty Ltd
+          - JABIRU AIRCRAFT PTY LTD
+          - Jabiru engine
+          - JABIRU ENGINES
+  Date:
+    End: '2018-11-30'
+    Field: Occurrence.Date
+    Format: '%d %b %Y'
+  Identifier: Occurrence.ID
+  Analyse:
+    FatalAccident:
+      variable: isFatal
+      class: character
+    OccurrenceType:
+      variable: Occurrence.Type.Description
+      class: character
+    IcaoTypeDesignator:
+      variable: Aircraft.Mapped.ICAO.Type.Designator
+      class: character
+    CasaSector:
+      variable: Aircraft.Mapped.CASA.Sector
+      class: character
+    AircraftType:
+      variable: Aircraft.Type
+      class: character
+    Aerodrome:
+      variable: Aerodrome
+      class: character
+    EngineManufacturerType:
+      variable:
+      - Aircraft.Engine.Manufacturer
+      - Aircraft.Engine.Type
+      class:
+      - character
+      - character
+    OccurrenceTypeSector:
+      variable:
+      - Occurrence.Type.Description
+      - Aircraft.Mapped.CASA.Sector
+      class:
+      - character
+      - character
+    OccurrenceCategoryDesignator:
+      variable:
+      - Occurrence.Category.Type
+      - Aircraft.Mapped.ICAO.Type.Designator
+      class:
+      - character
+      - character
+    OccurrenceTypeAircraft:
+      variable:
+      - Occurrence.Type.Description
+      - Aircraft.Mapped.ICAO.Type.Designator
+      class:
+      - character
+      - character
