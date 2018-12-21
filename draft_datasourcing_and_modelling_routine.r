@@ -48,7 +48,7 @@ config <- read_yaml("PETA.yaml")
 # We can only process one source at a time - configure with this variable.
 # TODO - See if we can process multiple sources in one run.
 
-source <- 'CIRRIS'
+source <- 'ASIR'
 
 stopifnot(
   source %in% names(config),

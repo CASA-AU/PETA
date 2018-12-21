@@ -248,3 +248,10 @@ ASIR:
       class:
       - character
       - character
+    OccurrenceTypeAerodrome:
+      variable:
+      - Occurrence.Type.Description
+      - Aerodrome
+      class:
+      - character
+      - character
